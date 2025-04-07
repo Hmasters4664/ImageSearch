@@ -32,6 +32,11 @@ class QueryItem(BaseModel):
     top_k: int = 3
     team: str
 
+class ImageQuery(BaseModel):
+    base64_image: str
+    top_k: int = 3
+    team: str
+
 def get_image_embedding_from_base64(base64_str):
     clean_b64 = base64_str.replace('\n', '').replace(' ', '')
     image_data = base64.b64decode(base64_str)
@@ -80,6 +85,32 @@ def search_images(query: QueryItem):
             {
                 "id": result_id,
                 "caption": metadata.get("team")
+            }
+            for result_id, metadata in zip(results["ids"][0], results["metadatas"][0])
+        ]
+        return {"results": matched}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/search-by-image")
+def search_by_image(query: ImageQuery):
+    try:
+        # Embed the query image
+        embedding = get_image_embedding_from_base64(query.base64_image)
+        collection = client.get_or_create_collection(
+            name=query.team)
+
+        # Search in Chroma using this image embedding
+        results = collection.query(
+            query_embeddings=[embedding.tolist()],
+            n_results=query.top_k
+        )
+
+        matched = [
+            {
+                "id": result_id,
+                "metadata": metadata
             }
             for result_id, metadata in zip(results["ids"][0], results["metadatas"][0])
         ]
